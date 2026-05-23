@@ -1,6 +1,5 @@
 #include <esp_now.h>
 #include <WiFi.h>
-
 uint8_t robotMAC[] = {0x00, 0x70, 0x07, 0x82, 0xBC, 0x48};
 
 typedef struct {

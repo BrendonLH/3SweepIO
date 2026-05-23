@@ -2,33 +2,56 @@
 #include <esp_now.h>
 #include <WiFi.h>
 
+
 // Joystick pins
 #define JOY_X 2
 #define JOY_Y 3
 #define JOY_SW 4
-
-// Commands
-#define CMD_STOP 0
-#define CMD_LEFT 1
-#define CMD_RIGHT 2
-#define CMD_DOWN 3
-#define CMD_UP 4
-#define CMD_CLICK 5
 
 unsigned long lastSendTime = 0;
 int sendInterval = 50; // ms
 
 uint8_t robotMAC[] = {0x14, 0x33, 0x5C, 0x03, 0x10, 0xAC};
 
+bool steeringInverted = false;
+bool lastButtonState = HIGH;
+
 typedef struct
 {
-    int command;
+    int throttle; // -255 to 255
+    int steering; // -255 to 255
+
 } ControlPacket;
 
 ControlPacket data;
 esp_now_peer_info_t peerInfo;
 
-int lastCommand = -1;
+// joystick calibration
+int xCenterVal = 2790;
+int yCenterVal = 2330;
+int deadzone = 300; // more give around center
+
+int lastThrottle = 999;
+int lastSteering = 999;
+
+int readAxis(int value, int center)
+{
+    int diff = value - center;
+
+    if (abs(diff) < deadzone)
+    {
+        return 0;
+    }
+
+    if (diff > 0)
+    {
+        return map(diff, deadzone, 4095 - center, 0, 255);
+    }
+    else
+    {
+        return map(diff, -deadzone, -center, 0, -255);
+    }
+}
 
 void setup()
 {
@@ -48,9 +71,13 @@ void setup()
     peerInfo.channel = 0;
     peerInfo.encrypt = false;
 
-    esp_now_add_peer(&peerInfo);
+    if (esp_now_add_peer(&peerInfo) != ESP_OK)
+    {
+        Serial.println("Failed to add peer");
+        return;
+    }
 
-    delay(2000); // give monitor time to connect
+    delay(2000);
 
     Serial.println("=== CONTROLLER BOOTED ===");
 }
@@ -60,68 +87,57 @@ void loop()
     int x = analogRead(JOY_X);
     int y = analogRead(JOY_Y);
 
-    int button = digitalRead(JOY_SW);
-    bool pressed = (button == LOW); // active LOW
+    bool buttonState = digitalRead(JOY_SW);
 
-    int command = CMD_STOP;
+    if (lastButtonState == HIGH && buttonState == LOW)
+    {
+        steeringInverted = !steeringInverted;
 
-    int xCenterVal = 2790;
-    int yCenterVal = 2330;
-    int deadzone = 200;
-
-    bool xCenter = (x > xCenterVal - deadzone && x < xCenterVal + deadzone);
-    bool yCenter = (y > yCenterVal - deadzone && y < yCenterVal + deadzone);
-
-    // 🔥 CLICK HAS PRIORITY
-    if (pressed)
-    {
-        command = CMD_CLICK;
-    }
-    else if (!yCenter)
-    {
-        if (y > yCenterVal + deadzone)
-        {
-            command = CMD_LEFT;
-        }
-        else
-        {
-            command = CMD_RIGHT;
-        }
-    }
-    else if (!xCenter)
-    {
-        if (x > xCenterVal + deadzone)
-        {
-            command = CMD_DOWN;
-        }
-        else
-        {
-            command = CMD_UP;
-        }
-    }
-    else
-    {
-        command = CMD_STOP;
+        Serial.print("Steering mode: ");
+        Serial.println(steeringInverted ? "INVERTED" : "NORMAL");
     }
 
-    // ✅ Only send when command changes
+    lastButtonState = buttonState;
+
+    // X is forward/backward on your setup
+    // Y is left/right steering on your setup
+    int throttle = readAxis(x, xCenterVal);
+    int steering = readAxis(y, yCenterVal);
+
+    // Flip directions if needed
+    throttle = -throttle;
+    if (steeringInverted)
+    {
+        steering = -steering;
+    }
+
     unsigned long now = millis();
 
-    if (command == CMD_STOP || command != lastCommand || (now - lastSendTime > sendInterval))
+    bool changed =
+        throttle != lastThrottle ||
+        steering != lastSteering;
+
+    if (changed || now - lastSendTime > sendInterval)
     {
-        data.command = command;
+        data.throttle = throttle;
+        data.steering = steering;
+
         esp_now_send(robotMAC, (uint8_t *)&data, sizeof(data));
 
-        // only print when command changes (keeps console clean)
-        if (command != lastCommand)
+        if (changed)
         {
-            Serial.print("CMD: ");
-            Serial.println(command);
+            Serial.print("Throttle: ");
+            Serial.print(throttle);
+            Serial.print(" | Steering: ");
+            Serial.print(steering);
+            Serial.print(" | Mode: ");
+            Serial.println(steeringInverted ? "INVERTED" : "NORMAL");
         }
 
-        lastCommand = command;
+        lastThrottle = throttle;
+        lastSteering = steering;
         lastSendTime = now;
     }
 
-    delay(30);
+    delay(20);
 }
