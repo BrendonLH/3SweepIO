@@ -177,9 +177,10 @@ void driveMixed(int throttle, int steering)
     rightPower = constrain(rightPower, -255, 255);
     leftPower = constrain(leftPower, -255, 255);
 
+    int offsetDirection = throttle >= 0 ? 1 : -1;
     int correctionDirection = throttle >= 0 ? 1 : -1;
 
-    int correctedRight = rightPower - MOTOR_A_OFFSET - (autoCorrection * correctionDirection);
+    int correctedRight = rightPower - (MOTOR_A_OFFSET * offsetDirection) - (autoCorrection * correctionDirection);
     int correctedLeft = leftPower + (autoCorrection * correctionDirection);
 
     setMotorA(constrain(correctedRight, -255, 255)); // Motor A = right
