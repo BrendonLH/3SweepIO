@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <esp_now.h>
 #include <WiFi.h>
-#include "secrets.h"
 
 // Joystick pins
 #define JOY_X 2
