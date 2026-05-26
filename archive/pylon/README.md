@@ -22,6 +22,24 @@ PA7   -> WHITE  -> Not Connected
 
 # Reyax RYUW122 Command Cheat Sheet
 
+## Known Startup Behavior
+
+On firmware RYUW122_V1.0.21, the module may not respond to AT commands immediately after power-up.
+
+Verified workaround:
+
+1. Pull NRST LOW for 100ms
+2. Release NRST HIGH
+3. Wait 1000ms
+4. Send AT command
+
+Example:
+
+AT
+
+Response:
++OK
+
 ## Basic Commands
 
 ### Test Communication
@@ -326,17 +344,17 @@ AT+RSSI?
 ### Anchor Setup
 
 ```text
+AT+ADDRESS=A001
+AT+NETWORKID=MONKY01
 AT+MODE=1
-AT+NETWORKID=REYAX123
-AT+ADDRESS=ANCHOR01
 ```
 
 ### Tag Setup
 
 ```text
-AT+MODE=0
-AT+NETWORKID=REYAX123
 AT+ADDRESS=TAG00001
+AT+NETWORKID=MONKY01
+AT+MODE=0
 ```
 
 Both devices must use:
